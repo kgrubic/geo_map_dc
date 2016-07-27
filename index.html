@@ -1,0 +1,269 @@
+<!DOCUMENT html>
+<meta charset="utf-8">
+<style>  
+
+.province {
+  stroke: #fff;
+  stroke-width: 1px;
+}
+.province:hover {
+  fill: #666;
+}  
+.hidden {
+  display: none;
+}
+div.tooltip {
+  color: #222;
+  background-color: #fff;
+  padding: .5em;
+  text-shadow: #f5f5f5 0 1px 0;
+  border-radius: 2px;
+  opacity: 0.9;
+  position: absolute;
+}
+
+body {
+  font: 10px sans-serif;
+}
+
+.bar rect {
+  fill: steelblue;
+}
+
+.bar text.value {
+  fill: white;
+}
+
+.axis {
+  shape-rendering: crispEdges;
+}
+
+.axis path {
+  fill: none;
+}
+
+.x.axis line {
+  stroke: #fff;
+  stroke-opacity: .8;
+}
+
+.y.axis path {
+  stroke: black;
+}
+</style>
+<html ng-app="myApp">
+<head>
+  <script src="//d3js.org/d3.v3.min.js" charset="utf-8"></script>
+  <script data-require="angular.js@*" data-semver="1.3.0-beta.5" src="https://code.angularjs.org/1.3.0-beta.5/angular.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/1.10.0/d3-legend.min.js"></script>
+</head>
+<doby ng-controller="MyController">
+  <input type="text" ng-model="enteredValue">
+  <br>
+  <button type="button" ng-Click="findValue(enteredValue)">Search</button>
+  <h3>Results</h3>
+  <ul>
+    <li ng-repeat="result in results">Total impaired crashes: {{result.total}} , 2010 : {{result[2010]}}, 2011 : {{result[2011]}}, 2012 : {{result[2012]}}, 2013 : {{result[2013]}}, 2014 : {{result[2014]}}, Last modified : {{result.datelastmo}}, website : <a href = {{result.web_url}}> {{result.web_url}}</a> 
+    </li>
+  </ul>
+  <div>
+    <label for="nVel">
+      Total crashes  = <span id="goal-value">37</span>
+      <input style="width: 200px;" type="range" min="0" max="37" id="goal" value="37" step='1'>
+    </label>
+  </div>
+  <script>
+
+//****************************************************** MAP visualisation ******************************************************//
+(function(){
+
+    //Using Angular for search 
+  angular.module('myApp', [])
+    .controller('MyController', function ($scope, $http){
+      $http.get('test.json')
+      .success(function(data) {
+        $scope.myData = data;
+      });
+      $scope.results = [];
+
+      $scope.findValue = function(enteredValue) {     
+        angular.forEach($scope.myData, function(value, key) {
+          if(key === 'features'){
+            var i;
+            $scope.results = [];
+            for(i = 0 ; i< value.length;i++){
+              //console.log(value[i].properties.name);
+              if(value[i].properties.name === enteredValue){
+                // adding to a list, key:value data form a json, that will be printed for a user, for a region that's in a search text input 
+                $scope.results.push({"total": value[i].properties.total, "2010":value[i].properties[2010],"2011":(value[i].properties[2011] === null ? 0 : value[i].properties[2011]),"2012": (value[i].properties[2012] === null ? 0 : value[i].properties[2012]),"2013":(value[i].properties[2013] === null ? 0 : value[i].properties[2013]),"2014":(value[i].properties[2014] === null ? 0 : value[i].properties[2014]), "datelastmo": value[i].properties.datelastmo , "web_url" : value[i].properties.web_url });
+              }
+            }
+          }
+        });
+      };
+    }); 
+
+
+
+//*************** drawing map *******************//
+var width = 1300,
+height = 1300;
+
+var svg = d3.select("body").append("svg")
+  .attr("width", width)
+  .attr("height", height);
+
+var tooltip = d3.select('body').append('div')
+  .attr('class', 'hidden tooltip');
+  //var center = d3.geo.centroid(json)
+
+
+d3.json("test.json", function(dc) {
+    var projection = d3.geo.albersUsa()
+        .scale(1)
+        .translate([0,0]);  
+
+    //creating path
+    var path = d3.geo.path()
+        .projection(projection);
+
+    var bounds = path.bounds(dc),
+        dx = Math.abs(bounds[1][0] - bounds[0][0]),
+        dy = Math.abs(bounds[1][1] - bounds[0][1]),
+        x = (bounds[1][0] + bounds[0][0]),
+        y = (bounds[1][1] + bounds[0][1]);
+
+
+    scale = 0.85 / Math.max( dx / width, dy / height );
+    offset = [ (width - scale * x)/2 , (height - scale * y)/2];
+
+    // new projection
+    projection = projection                     
+        .scale(scale)
+        .translate(offset);
+        
+
+    svg.selectAll("path")
+        .data(dc.features)
+        .enter()
+        .append("path")
+        .attr("d", path)
+        .attr('class', function(d) {
+          return 'province ' + "col"+d.properties.total;
+        })
+        .attr("fill",function(d){
+          if(d.properties.total === null )
+            return '#27AE60'
+          if(d.properties.total <= 6 && d.properties.total > 0)
+            return '#82E0AA';
+          if(d.properties.total <= 12 && d.properties.total > 6)
+            return '#F7DC6F';
+          if(d.properties.total <= 18 && d.properties.total > 12)
+            return '#E67E22';
+          if(d.properties.total <= 24 && d.properties.total > 18)
+            return '#F1948A';
+          if(d.properties.total >= 25)
+            return '#C0392B';
+        })
+        .on('mousemove', function(d) {
+          var mouse = d3.mouse(svg.node()).map(function(d) {
+            return parseInt(d);
+          });
+          tooltip.classed('hidden', false)
+            .attr('style', 'left:' + (mouse[0] + 15) + 'px; top:' + (mouse[1] - 35) + 'px')
+
+            .html( "by year </br> 2010 : " + (d.properties[2010] === null ? 0 : d.properties[2010]) +
+                "</br> 2011 : " + (d.properties[2011] === null ? 0 : d.properties[2011])+
+                "</br> 2012 : " + (d.properties[2012] === null ? 0 : d.properties[2012])+
+                "</br> 2013 : " + (d.properties[2013] === null ? 0 : d.properties[2013])+
+                "</br> 2014 : " + (d.properties[2014] === null ? 0 : d.properties[2014]))
+        })
+        .on('mouseout', function() {
+          tooltip.classed('hidden', true);
+        });
+
+
+//******* limiting map with the slider and hiding some map area *************/
+    d3.select("#goal").on("input", function() {
+          goal = +this.value;
+          d3.select('#goal-value').text(goal);
+          svg.selectAll("svg path").each(function(d) {
+            if(d.properties !== undefined )
+              this.style.opacity = (d.properties.total <= goal ? 1 : 0);
+          })
+          /*.on('mousemove', function(d) {
+            tooltip.style("opacity", (d.properties.total <= goal ? 1 : 0));
+          })*/
+          ;
+          svg.selectAll("svg text").each(function(d) {
+            if(d.properties !== undefined )
+              this.style.opacity = (d.properties.total <= goal ? 1 : 0); 
+          });
+
+        });
+
+       //** I need this function to use leter to show name of the area in two lines **//
+
+       function wordwrap(text) {
+         var lines=text.split(" ")
+         return lines
+       }
+
+      //** Adding names on map**//
+
+      svg.selectAll("text")
+        .data(dc.features)
+        .enter()
+        .append('svg:text')
+        .attr("text-anchor","middle")
+        .attr('font-size','7pt')
+        .append("svg:tspan")
+        .attr("x", function(d){
+          return path.centroid(d)[0];
+        })
+        .attr("y", function(d){
+          return  path.centroid(d)[1];
+        })
+        .text(function(d){
+          var list = wordwrap(d.properties.name);
+          return list[0];
+        })
+        .append('svg:tspan')
+        .attr("x", function(d){
+          return path.centroid(d)[0];
+        })
+        .attr("y", function(d){
+          return  path.centroid(d)[1] + 10;
+        })
+        .text(function(d){
+          var list = wordwrap(d.properties.name);
+          return list[1];
+        });
+
+//*********LEGEND***************//
+
+        var ordinal = d3.scale.ordinal()
+          .domain(["0", "0 to 6", "7 to 12", "13 to 18", "19 to 24" , "more then 24 crashes"])
+          .range([ "rgb(39, 174, 96)", "rgb(130,224,170)", "rgb(247,220,111)", "rgb(230, 126, 34)", "rgb(241,148,138)", "rgb(192,57,43)"]);
+
+
+        svg.append("g")
+        .attr("class", "legendOrdinal")
+        .attr("transform", "translate(1000,20)");
+
+        var legendOrdinal = d3.legend.color()
+        .shape("path", d3.svg.symbol().type("triangle-up").size(150)())
+        .shapePadding(10)
+        .scale(ordinal);
+
+        svg.select(".legendOrdinal")
+        .call(legendOrdinal);
+    });
+})();
+
+//****************CHART****************************//
+
+
+</script>
+</body>
+</html>        
